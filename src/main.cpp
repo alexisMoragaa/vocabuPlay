@@ -1,13 +1,13 @@
-// Libereias necesarias para el funciionamiento 👇👇
+// Libereias necesarias para el funciionamiento 👇
 #include <Arduino.h>
 #include <SPI.h>
-#include <MFRC522.h>//Libreria para el manejo de lecturas y escrituras de las tarjetas rfid 👈
+#include <MFRC522.h>//Manejo de lecturas y escrituras de las tarjetas rfid
 #include "SoftwareSerial.h"
-#include "DFRobotDFPlayerMini.h"//Libreria para el manejo de DFPlayerMini 👈
-// Libereias necesarias para el funciionamiento 👆👆
+#include "DFRobotDFPlayerMini.h"//Manejo de DFPlayerMini
+// Libereias necesarias para el funciionamiento 👆
 
 
-//Variables para controlar la reprocuccion y volumen 👇👇
+//Variables para controlar la reprocuccion y volumen 👇
 boolean isPlaying = false;
 const byte volumenPot = A0;
 byte volumen;
@@ -16,57 +16,116 @@ SoftwareSerial mySoftwareSerial(5, 6);// pines de transmision rx y tx
 
 DFRobotDFPlayerMini myDFPlayer;
 void printDetail(uint8_t type, int value);
+//Variables para controlar la reprocuccion y volumen 👆
 
-void ajustarVolumen();//inicializamos la funcion que ajusta el volumen
-//Variables para controlar la reprocuccion y volumen 👆👆
+
+//Estructura de datoas que alojara las preguntas y respuestas 👇
+struct PreguntasRespuesta {
+  int pregunta;
+  int tipoPregunta; //el tipo de pregunta determinara el tipo de respuesta que se espera, 1 => palabras que inicien con, 2 => parabras que termninen con, 3 => cantidad de silabas
+  char respuesta;
+};
+const int tamano = 6;
+PreguntasRespuesta preguntas[tamano] = {
+  {1, 1, 'a'},
+  {2, 1, 'b'},
+  {3, 1, 'e'},
+  {4, 1, 'i'},
+  {5, 1, 'o'},
+  {6, 1, 'u'},
+};
+
+bool preguntasSeleccionadas[tamano] =  {false};
+//Estructura de datoas que aloja las preguntas y respuestas 👆
+
+
+int getRamdomQuestion();//inicializamos la funcion que retorna una pregunta de forma aleatoria
+bool checkPlayStatus(); //inicializamos la funcion que determina el status de reproducción
+
+
+int randomQuestion;
+const int nextQuestion = 3; //usamos el pin 3 para leer el boton que cambiara la pregunta👈
+int contadorPreguntasSeleccionadas = 0;//inicializamos el contador de preguntas respondidas
+
 
 void setup() {
-  Serial.begin(115200);                                           // Initialize serial communications with the PC, COMMENT OUT IF IT FAILS TO PLAY WHEN DISCONNECTED FROM PC
+  Serial.begin(9600);                                           // Initialize serial communications with the PC, COMMENT OUT IF IT FAILS TO PLAY WHEN DISCONNECTED FROM PC
   mySoftwareSerial.begin(9600);
   SPI.begin();
 
+  pinMode(nextQuestion, INPUT_PULLUP);
+
   Serial.println(F("Inicializando DFPlayer ... (Esto puede tomar algunos segundos)"));
   if (!myDFPlayer.begin(mySoftwareSerial)) {  //Use softwareSerial to communicate with mp3.
-    Serial.println(F("Unable to begin:"));
-    Serial.println(F("1.Please recheck the connection!"));
-    Serial.println(F("2.Please insert the SD card!"));
+    Serial.println(F("Error al inizar DFPlayer mini"));
   }
-  Serial.println(F("DFPlayer Mini online. Place card on reader to play a spesific song"));
-
+  Serial.println(F("DFPlayer mini se inicializo con exito"));
 
   volumen = map(analogRead(volumenPot), 0,1023, 0,30);//tomamos el valor del potenciometro y lo mapeamos en la variable volumen
   prevVolumen = volumen;
-  myDFPlayer.volume(volumen);//Inicializamos el volumen del dfplayer segun la lectura inicial delpotenciometro
+  myDFPlayer.volume(volumen);//Inicializamos el volumen del dfplayer segun la lectura inicial del potenciometro
   myDFPlayer.EQ(DFPLAYER_EQ_NORMAL);//Establece la ecualizacion en normal 👈
+
+  randomSeed(analogRead(A6));//inicializa un seeder para crear un numero aleatorio
 
 }
 
 
+
 void loop() {
-  // put your main code here, to run repeatedly:
-
-   volumen = map(analogRead(volumenPot), 0, 1023, 0, 30);   //scale the pot value and volume level
-
+  //Control del volumen 👇
+  volumen = map(analogRead(volumenPot), 0, 1023, 0, 30);  
   if (volumen - prevVolumen >= 3 || prevVolumen - volumen >= 3 ){
     myDFPlayer.volume(volumen);
     Serial.println(volumen);  
     prevVolumen = volumen;
     delay(1);
   }
-
+  //Control del volumen 👆
   
-  if(!isPlaying){
-    myDFPlayer.play(0001);
-    isPlaying = true;
+  //Cambiamos a la siguiente pregunta solo cuando la reproduccion de la pregunta anterior finalice
+  if(digitalRead(nextQuestion) == LOW){
+    bool playing = checkPlayStatus();
+    if(!playing){//chequeamos el estado del reproductor y reproducimos una nueva pregunta solo si no se esta reproduciendo nada
+      randomQuestion = getRamdomQuestion();
+      myDFPlayer.play(preguntas[randomQuestion].pregunta);
+      isPlaying = true;
+      delay(250);
+    }
   }
 
-  delay(100);
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(200);
-  digitalWrite(LED_BUILTIN, LOW);
+
 }
 
 
-void ajustarVolumen(){
- 
+
+//creamos una funcion que retorna un numero aleatorio de pregunta
+int  getRamdomQuestion(){
+  // Verifica si todas las preguntas ya han sido seleccionadas
+  if (contadorPreguntasSeleccionadas >= tamano) {
+    return 999; 
+  }
+
+  int rq;
+  do{
+    rq = random(0, tamano);
+  }while(preguntasSeleccionadas[rq]);
+
+  preguntasSeleccionadas[rq] = true;
+  Serial.println(rq);
+  contadorPreguntasSeleccionadas++;
+  return rq;
 }
+
+
+//Creamos una funcion que nos permite saver si un audio se esta reproduciendo o no
+bool checkPlayStatus() {
+  if (myDFPlayer.available()) {
+    if (myDFPlayer.readType() == DFPlayerPlayFinished) {
+      isPlaying = false; // Actualiza el estado a no reproduciendo
+    }
+  }
+
+  return isPlaying;
+}
+
