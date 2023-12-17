@@ -4,6 +4,7 @@
 #include <MFRC522.h>//Manejo de lecturas y escrituras de las tarjetas rfid
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"//Manejo de DFPlayerMini
+#include "PreguntasRespuestas.h"
 // Libereias necesarias para el funciionamiento 👆
 
 
@@ -19,26 +20,7 @@ void printDetail(uint8_t type, int value);
 //Variables para controlar la reprocuccion y volumen 👆
 
 
-//Estructura de datoas que alojara las preguntas y respuestas 👇
-struct PreguntasRespuesta {
-  int pregunta;
-  int tipoPregunta; //el tipo de pregunta determinara el tipo de respuesta que se espera, 1 => palabras que inicien con, 2 => parabras que termninen con, 3 => cantidad de silabas
-  char respuesta;
-};
-const int tamano = 6;
-PreguntasRespuesta preguntas[tamano] = {
-  {1, 1, 'a'},
-  {2, 1, 'b'},
-  {3, 1, 'e'},
-  {4, 1, 'i'},
-  {5, 1, 'o'},
-  {6, 1, 'u'},
-};
-
-bool preguntasSeleccionadas[tamano] =  {false};
-//Estructura de datoas que aloja las preguntas y respuestas 👆
-
-
+bool preguntasSeleccionadas[500] =  {false};
 int getRamdomQuestion();//inicializamos la funcion que retorna una pregunta de forma aleatoria
 bool checkPlayStatus(); //inicializamos la funcion que determina el status de reproducción
 
@@ -49,6 +31,9 @@ int contadorPreguntasSeleccionadas = 0;//inicializamos el contador de preguntas 
 
 
 void setup() {
+  for (int i = 0; i < tamano; i++) {
+        preguntasSeleccionadas[i] = false;
+  }
   Serial.begin(9600);                                           // Initialize serial communications with the PC, COMMENT OUT IF IT FAILS TO PLAY WHEN DISCONNECTED FROM PC
   mySoftwareSerial.begin(9600);
   SPI.begin();
