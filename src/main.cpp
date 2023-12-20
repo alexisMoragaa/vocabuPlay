@@ -31,8 +31,16 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 #define ELEMENTOS_TARJETA 3
 #define MAX_LARGO_TARJETA 10
 
-// char valoresTarjeta[ELEMENTOS_TARJETA][MAX_LARGO_TARJETA];
-// char* valoresTarjeta[ELEMENTOS_TARJETA];
+//Creamos una estructura para almacenar la lectura de la tarjeta
+struct DATA_CARD{
+  String inicia;
+  String termina;
+  int silabas;
+};
+
+DATA_CARD CARD;
+
+void extraerDatos(String lectura, DATA_CARD &CARD);
 //Variables para gestionar la lectura de la tarjeta 👆
 
 
@@ -43,7 +51,12 @@ bool checkPlayStatus(); //inicializamos la funcion que determina el status de re
 
 int randomQuestion;
 const int nextQuestion = 3; //usamos el pin 3 para leer el boton que cambiara la pregunta👈
-int contadorPreguntasSeleccionadas = 0;//inicializamos el contador de preguntas respondidas
+
+bool isGame = false;//Establece si el juego  ya esta iniciado
+int numQuestionsGame = 3;//establece el numero de preguntas que se realizaran
+int countQuestions = 0;//establece el contador de preguntas respondidas
+int currentQuestion;
+bool waithAnswer = false;
 
 void controlarVolumen(); //Declaramos la funcion que se usara en el control de volumen 👈
 String leerTarjetas(); //Declaramos la funcion que gestionara la lectura de tarjetas
@@ -73,7 +86,9 @@ void setup() {
   myDFPlayer.EQ(DFPLAYER_EQ_NORMAL);//Establece la ecualizacion en normal 👈
 
   randomSeed(analogRead(A6));//inicializa un seeder para crear un numero aleatorio
-
+  myDFPlayer.playMp3Folder(800);
+  isPlaying = true;
+  delay(250);
 }
 
 
@@ -85,46 +100,67 @@ void loop() {
   //Cambiamos a la siguiente pregunta solo cuando la reproduccion de la pregunta anterior finalice
   if(digitalRead(nextQuestion) == LOW){
     bool playing = checkPlayStatus();
-    if(!playing){//chequeamos el estado del reproductor y reproducimos una nueva pregunta solo si no se esta reproduciendo nada
-      randomQuestion = getRamdomQuestion();
-      myDFPlayer.play(preguntas[randomQuestion].pregunta);
+
+    if(waithAnswer){//impide solicitar nuevas preguntas hasta responder la pregunta anterior
+      myDFPlayer.playMp3Folder(801);
       isPlaying = true;
       delay(250);
     }
-  }
 
-  
-  String datosTarjeta =  leerTarjetas();// Lee las tarjetas
-  if (datosTarjeta != "") {
-      Serial.println(datosTarjeta);
+    if(!playing && !waithAnswer){//chequeamos el estado del reproductor y reproducimos una nueva pregunta solo si no se esta reproduciendo nada
+      randomQuestion = getRamdomQuestion();
+      if(randomQuestion < 800){
+        currentQuestion = randomQuestion;
+        randomQuestion = preguntas[randomQuestion].pregunta;
+      }
+      Serial.println(randomQuestion);
+      myDFPlayer.playMp3Folder(randomQuestion);
+      isPlaying = true;
+      waithAnswer = true;
+      delay(250);
     }
-}
 
-
-void controlarVolumen() {
-  volumen = map(analogRead(volumenPot), 0, 1023, 0, 30);
-  if (abs(volumen - prevVolumen) >= 3) {
-    myDFPlayer.volume(volumen);
-    Serial.println(volumen);
-    prevVolumen = volumen;
   }
+
+  //Validamos que se espere una respuesta y que la pregunta no se este reproduciendo para leer la tarjeta
+  if(waithAnswer ){
+    isPlaying = checkPlayStatus();
+    if(!isPlaying){
+      String datosTarjeta =  leerTarjetas();// Lee las tarjetas
+      if (datosTarjeta != "") {
+        extraerDatos(datosTarjeta, CARD);
+        Serial.println(CARD.inicia[0]);
+
+        if(CARD.inicia[0] == preguntas[currentQuestion].respuesta){
+          Serial.println("RespuestaCorrecta");
+        }else{
+          Serial.println("Fallaste");
+        }
+        waithAnswer = false;
+      }
+    }
+
+  }
+
 }
+
+
+
 
 //creamos una funcion que retorna un numero aleatorio de pregunta
 int  getRamdomQuestion(){
   // Verifica si todas las preguntas ya han sido seleccionadas
-  if (contadorPreguntasSeleccionadas >= tamano) {
-    return 999; 
+  int rq;
+  if (countQuestions >= numQuestionsGame) {
+    return 850; 
   }
 
-  int rq;
   do{
     rq = random(0, tamano);
   }while(preguntasSeleccionadas[rq]);
 
   preguntasSeleccionadas[rq] = true;
-  Serial.println(rq);
-  contadorPreguntasSeleccionadas++;
+  countQuestions++;
   return rq;
 }
 
@@ -136,11 +172,10 @@ bool checkPlayStatus() {
       isPlaying = false; // Actualiza el estado a no reproduciendo
     }
   }
-
   return isPlaying;
 }
 
-
+//LeerTarjetas es la funcion encargada de  realizar la lectura rfid de una tarjeta y retornar la cadena de texto contenida en la misma
 String leerTarjetas() {
 
   MFRC522::MIFARE_Key key;
@@ -187,9 +222,30 @@ String leerTarjetas() {
     delay(200);
     mfrc522.PICC_HaltA();
     mfrc522.PCD_StopCrypto1();
-
+    lectura.trim();
     return lectura;
   }
   return "";
 
+}
+
+void extraerDatos (String lectura, DATA_CARD &CARD){
+  // Encontrar la posición de la primera y segunda coma
+  int primeraComa = lectura.indexOf(',');
+  int segundaComa = lectura.indexOf(',', primeraComa + 1);
+
+   // Extraer las partes de la cadena
+  CARD.inicia = lectura.substring(0, primeraComa);
+  CARD.termina = lectura.substring(primeraComa + 1, segundaComa);
+  CARD.silabas = lectura.substring(segundaComa + 1).toInt();
+}
+
+
+void controlarVolumen() {
+  volumen = map(analogRead(volumenPot), 0, 1023, 0, 30);
+  if (abs(volumen - prevVolumen) >= 3) {
+    myDFPlayer.volume(volumen);
+    // Serial.println(volumen);
+    prevVolumen = volumen;
+  }
 }
