@@ -1,14 +1,14 @@
-// Libereias necesarias para el funciionamiento 👇
+//👇 Libereias necesarias para el funciionamiento 👇
 #include <Arduino.h>
 #include <SPI.h>
 #include <MFRC522.h>//Manejo de lecturas y escrituras de las tarjetas rfid
 #include "SoftwareSerial.h"
 #include "DFRobotDFPlayerMini.h"//Manejo de DFPlayerMini
-#include "PreguntasRespuestas.h"
-// Libereias necesarias para el funciionamiento 👆
+#include "PreguntasRespuestas.h"//Matriz de preguntas y respuestas
+//👆 Libereias necesarias para el funciionamiento 👆
 
 
-//Variables para controlar la reprocuccion y volumen 👇
+//👇 Variables y funciones para controlar la reprocuccion y el volumen 👇
 boolean isPlaying = false;
 const byte volumenPot = A0;
 byte volumen;
@@ -17,17 +17,21 @@ SoftwareSerial mySoftwareSerial(5, 6);// pines de transmision rx y tx
 
 DFRobotDFPlayerMini myDFPlayer;
 void printDetail(uint8_t type, int value);
-//Variables para controlar la reprocuccion y volumen 👆
+
+void playSong(int numberSong);
+void controlarVolumen(); //Declaramos la funcion que se usara en el control de volumen 
+bool checkPlayStatus(); //inicializamos la funcion que determina el status de reproducción
+//👆 Variables y funciones para controlar la reprocuccion y el volumen 👆
 
 
-//Variables para controlar el modulo RFID 👇
+//👇 Variables para controlar el modulo RFID 👇
 #define RST_PIN 9 
 #define SS_PIN  10
 MFRC522 mfrc522(SS_PIN, RST_PIN);
-//Variables para controlar el modulo RFID 👆
+//👆 Variables para controlar el modulo RFID 👆
 
 
-//Variables para gestionar la lectura de la tarjeta 👇
+//👇 Variables y funciones para gestionar la lectura de la tarjeta 👇
 #define ELEMENTOS_TARJETA 3
 #define MAX_LARGO_TARJETA 10
 
@@ -41,25 +45,21 @@ struct DATA_CARD{
 DATA_CARD CARD;
 
 void extraerDatos(String lectura, DATA_CARD &CARD);
-//Variables para gestionar la lectura de la tarjeta 👆
+String leerTarjetas(); //Declaramos la funcion que gestionara la lectura de tarjetas
+//👆 Variables y funciones para gestionar la lectura de la tarjeta 👆
 
 
+//👇 Variables y funciones que gestionan el flujo del juego 👇
 bool preguntasSeleccionadas[500] =  {false};
-int getRamdomQuestion();//inicializamos la funcion que retorna una pregunta de forma aleatoria
-bool checkPlayStatus(); //inicializamos la funcion que determina el status de reproducción
-
-
 int randomQuestion;
-const int nextQuestion = 3; //usamos el pin 3 para leer el boton que cambiara la pregunta👈
-
-bool isGame = false;//Establece si el juego  ya esta iniciado
+const int nextQuestion = 3; //usamos el pin 3 para leer el boton que cambiara la pregunta
 int numQuestionsGame = 3;//establece el numero de preguntas que se realizaran
 int countQuestions = 0;//establece el contador de preguntas respondidas
 int currentQuestion;
-bool waithAnswer = false;
+bool waithAnswer = false;//usamos esta variable para definir cuando se espera una respuesta por parte del usuario
+int getRamdomQuestion();//inicializamos la funcion que retorna una pregunta de forma aleatoria
+//👆 Variables y funciones que gestionan el flujo del juego 👆
 
-void controlarVolumen(); //Declaramos la funcion que se usara en el control de volumen 👈
-String leerTarjetas(); //Declaramos la funcion que gestionara la lectura de tarjetas
 
 void setup() {
   //Itera el numero de preguntas existentes en la matriz para establecer el largo final del arreglo
@@ -86,9 +86,7 @@ void setup() {
   myDFPlayer.EQ(DFPLAYER_EQ_NORMAL);//Establece la ecualizacion en normal 👈
 
   randomSeed(analogRead(A6));//inicializa un seeder para crear un numero aleatorio
-  myDFPlayer.playMp3Folder(800);
-  isPlaying = true;
-  delay(250);
+  playSong(800);
 }
 
 
@@ -102,12 +100,10 @@ void loop() {
     bool playing = checkPlayStatus();
 
     if(waithAnswer && !playing){//impide solicitar nuevas preguntas hasta responder la pregunta anterior
-      myDFPlayer.playMp3Folder(801);
-      isPlaying = true;
-      delay(250);
+      playSong(801);
     }
 
-    if(!playing && !waithAnswer){//chequeamos el estado del reproductor y reproducimos una nueva pregunta solo si no se esta reproduciendo nada
+    if(!playing && !waithAnswer){//chequeamos el estado del reproductor y si esperamos una respuesta. Reproducimos una nueva pregunta solo si no se esta reproduciendo nada y no esperamos respuesta
       randomQuestion = getRamdomQuestion();
       if(randomQuestion < 800){
         currentQuestion = randomQuestion;
@@ -117,10 +113,7 @@ void loop() {
         waithAnswer = false;
       }
       Serial.println(randomQuestion);
-      myDFPlayer.playMp3Folder(randomQuestion);
-      isPlaying = true;
-      
-      delay(250);
+      playSong(randomQuestion);
     }
 
   }
@@ -134,17 +127,13 @@ void loop() {
       if (datosTarjeta != "") {
         extraerDatos(datosTarjeta, CARD);
         Serial.println(CARD.inicia[0]);
-        int response = 0;
         if(CARD.inicia[0] == preguntas[currentQuestion].respuesta){
-          Serial.println("RespuestaCorrecta");
-          response = 802;
+          Serial.println("Respuesta Correcta");
+          playSong(802);
         }else{
           Serial.println("Fallaste");
-          response = 803;
+          playSong(803);
         }
-
-        myDFPlayer.playMp3Folder(response);
-        isPlaying = true;
         waithAnswer = false;
       }
 
@@ -155,13 +144,18 @@ void loop() {
 }
 
 
+//Creamos una funcion que se encarga de gestionar la reproduccion y el estado de la misma
+void playSong(int numberSong){
+  myDFPlayer.playMp3Folder(numberSong);
+  isPlaying = true;
+  delay(250);
+}
 
 
-//creamos una funcion que retorna un numero aleatorio de pregunta
+//creamos una funcion que retorna un numero aleatorio de pregunta y lo almacena como pregunta seleccionada
 int  getRamdomQuestion(){
-  // Verifica si todas las preguntas ya han sido seleccionadas
   int rq;
-  if (countQuestions >= numQuestionsGame) {
+  if (countQuestions >= numQuestionsGame) {//Si ya se respondieron todas las preguntas retorna el audio 850 - end 
     return 850; 
   }
 
@@ -175,7 +169,7 @@ int  getRamdomQuestion(){
 }
 
 
-//Creamos una funcion que nos permite saver si un audio se esta reproduciendo o no
+//Creamos una funcion que nos permite saber el estado de reproduccion
 bool checkPlayStatus() {
   if (myDFPlayer.available()) {
     if (myDFPlayer.readType() == DFPlayerPlayFinished) {
@@ -184,6 +178,7 @@ bool checkPlayStatus() {
   }
   return isPlaying;
 }
+
 
 //LeerTarjetas es la funcion encargada de  realizar la lectura rfid de una tarjeta y retornar la cadena de texto contenida en la misma
 String leerTarjetas() {
@@ -239,8 +234,10 @@ String leerTarjetas() {
 
 }
 
+
+//Extrae los datos de la cadena lectura basandose en el delimitador "," y los almacena dentro de la estructura de CARD 
 void extraerDatos (String lectura, DATA_CARD &CARD){
-  // Encontrar la posición de la primera y segunda coma
+
   int primeraComa = lectura.indexOf(',');
   int segundaComa = lectura.indexOf(',', primeraComa + 1);
 
@@ -251,6 +248,7 @@ void extraerDatos (String lectura, DATA_CARD &CARD){
 }
 
 
+//Maneja el volumen usado en la reproduccion del sonido
 void controlarVolumen() {
   volumen = map(analogRead(volumenPot), 0, 1023, 0, 30);
   if (abs(volumen - prevVolumen) >= 3) {
