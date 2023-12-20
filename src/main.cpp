@@ -101,7 +101,7 @@ void loop() {
   if(digitalRead(nextQuestion) == LOW){
     bool playing = checkPlayStatus();
 
-    if(waithAnswer){//impide solicitar nuevas preguntas hasta responder la pregunta anterior
+    if(waithAnswer && !playing){//impide solicitar nuevas preguntas hasta responder la pregunta anterior
       myDFPlayer.playMp3Folder(801);
       isPlaying = true;
       delay(250);
@@ -112,32 +112,42 @@ void loop() {
       if(randomQuestion < 800){
         currentQuestion = randomQuestion;
         randomQuestion = preguntas[randomQuestion].pregunta;
+        waithAnswer = true;
+      }else{
+        waithAnswer = false;
       }
       Serial.println(randomQuestion);
       myDFPlayer.playMp3Folder(randomQuestion);
       isPlaying = true;
-      waithAnswer = true;
+      
       delay(250);
     }
 
   }
 
   //Validamos que se espere una respuesta y que la pregunta no se este reproduciendo para leer la tarjeta
-  if(waithAnswer ){
+  if(waithAnswer){
     isPlaying = checkPlayStatus();
     if(!isPlaying){
+
       String datosTarjeta =  leerTarjetas();// Lee las tarjetas
       if (datosTarjeta != "") {
         extraerDatos(datosTarjeta, CARD);
         Serial.println(CARD.inicia[0]);
-
+        int response = 0;
         if(CARD.inicia[0] == preguntas[currentQuestion].respuesta){
           Serial.println("RespuestaCorrecta");
+          response = 802;
         }else{
           Serial.println("Fallaste");
+          response = 803;
         }
+
+        myDFPlayer.playMp3Folder(response);
+        isPlaying = true;
         waithAnswer = false;
       }
+
     }
 
   }
@@ -245,7 +255,6 @@ void controlarVolumen() {
   volumen = map(analogRead(volumenPot), 0, 1023, 0, 30);
   if (abs(volumen - prevVolumen) >= 3) {
     myDFPlayer.volume(volumen);
-    // Serial.println(volumen);
     prevVolumen = volumen;
   }
 }
