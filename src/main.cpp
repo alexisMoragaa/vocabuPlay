@@ -53,11 +53,12 @@ String leerTarjetas(); //Declaramos la funcion que gestionara la lectura de tarj
 bool preguntasSeleccionadas[500] =  {false};
 int randomQuestion;
 const int nextQuestion = 3; //usamos el pin 3 para leer el boton que cambiara la pregunta
-int numQuestionsGame = 3;//establece el numero de preguntas que se realizaran
+int numQuestionsGame = 5;//establece el numero de preguntas que se realizaran
 int countQuestions = 0;//establece el contador de preguntas respondidas
 int currentQuestion;
 bool waithAnswer = false;//usamos esta variable para definir cuando se espera una respuesta por parte del usuario
 int getRamdomQuestion();//inicializamos la funcion que retorna una pregunta de forma aleatoria
+void validarRespuestas();
 //👆 Variables y funciones que gestionan el flujo del juego 👆
 
 
@@ -126,21 +127,36 @@ void loop() {
       String datosTarjeta =  leerTarjetas();// Lee las tarjetas
       if (datosTarjeta != "") {
         extraerDatos(datosTarjeta, CARD);
-        Serial.println(CARD.inicia[0]);
-        if(CARD.inicia[0] == preguntas[currentQuestion].respuesta){
-          Serial.println("Respuesta Correcta");
-          playSong(802);
-        }else{
-          Serial.println("Fallaste");
-          playSong(803);
-        }
-        waithAnswer = false;
+        validarRespuestas();
       }
-
     }
-
   }
 
+}
+
+//Esta funcion se encarga de comparar la respuesta entregada con la respuesta esperada y ejecutar el audio corresopndiente
+void validarRespuestas(){
+  String answer = "";
+  switch(preguntas[currentQuestion].tipoPregunta){
+    case 1:
+      answer = CARD.inicia.substring(0, 1); // Toma la primera letra de inicia
+      break;
+    case 2:
+      answer = CARD.termina.substring(0, 1); // Toma la primera letra de termina
+      break;
+    case 3:
+      answer = String(CARD.silabas); // Convierte silabas a String
+      break;
+  }
+
+  if(answer.equalsIgnoreCase(preguntas[currentQuestion].respuesta)){
+    Serial.println("Respuesta Correcta");
+    playSong(802);
+  }else{
+    Serial.println("Fallaste");
+    playSong(803);
+  }
+  waithAnswer = false;
 }
 
 
